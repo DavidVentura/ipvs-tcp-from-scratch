@@ -1,0 +1,19 @@
+[package]
+name = "ipvs-tcp-from-scratch-ebpf"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ipvs-tcp-from-scratch-common = { path = "../ipvs-tcp-from-scratch-common" }
+
+aya-ebpf = { workspace = true }
+aya-log-ebpf = { workspace = true }
+
+[build-dependencies]
+which = { workspace = true }
+bindgen = "0.71.1"
+
+[[bin]]
+name = "ipvs-tcp-from-scratch"
+path = "src/main.rs"
+
