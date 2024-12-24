@@ -39,6 +39,10 @@ async fn main() -> anyhow::Result<()> {
         // This can happen if you remove all log statements from your eBPF program.
         warn!("failed to initialize eBPF logger: {}", e);
     }
+    let tcp_conn: &mut KProbe = ebpf.program_mut("tcp_connect").unwrap().try_into()?;
+    tcp_conn.load()?;
+    tcp_conn.attach("tcp_connect", 0)?;
+
     let program: &mut TracePoint = ebpf
         .program_mut("ipvs_tcp_from_scratch")
         .unwrap()

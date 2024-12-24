@@ -168,6 +168,58 @@ fn try_ip_vs_conn_new(ctx: &ProbeContext) -> Result<u32, u32> {
     Ok(0)
 }
 
+#[kprobe]
+pub fn tcp_connect(ctx: ProbeContext) -> u32 {
+    match try_tcp_connect(&ctx) {
+        Ok(_ev) => 0,
+        Err(ret) => {
+            info!(&ctx, "tcp_conn err code {}", ret);
+            ret
+        }
+    }
+}
+fn tcp_key_from_sk_comm(ctx: &ProbeContext) -> Option<TcpKey> {
+    let conn_ptr: *const sock = ctx.arg(0)?;
+    let sk_comm = unsafe { helpers::bpf_probe_read_kernel(&((*conn_ptr).__sk_common)).ok()? };
+
+    // By definition, `tcp_connect` is called with SynSent state
+    // This `if` will never trigger -- it is here only to make the
+    // expected precondition explicit
+    if sk_comm.skc_state != TcpState::SynSent as u8 {
+        return None;
+    }
+
+    if sk_comm.skc_family != AF_INET {
+        // Not supporting IPv6 for now
+        return None;
+    }
+
+    let sport = unsafe { sk_comm.__bindgen_anon_3.__bindgen_anon_1.skc_num };
+    let vport = unsafe { sk_comm.__bindgen_anon_3.__bindgen_anon_1.skc_dport };
+    let vport = u16::from_be(vport);
+
+    let ip4daddr = unsafe { sk_comm.__bindgen_anon_1.__bindgen_anon_1.skc_daddr };
+    let ip4saddr = unsafe { sk_comm.__bindgen_anon_1.__bindgen_anon_1.skc_rcv_saddr };
+
+    Some(TcpKey {
+        src: SocketAddrV4::new(u32::from_be(ip4daddr).into(), sport),
+        dst: SocketAddrV4::new(u32::from_be(ip4saddr).into(), vport),
+    })
+}
+
+fn try_tcp_connect(ctx: &ProbeContext) -> Result<u32, u32> {
+    if let Some(key) = tcp_key_from_sk_comm(ctx) {
+        let ev = TcpSocketEvent {
+            oldstate: TcpState::Close,
+            newstate: TcpState::SynSent,
+            key,
+            ipvs_dest: None,
+        };
+        push_tcp_event(ctx, &ev);
+    }
+    Ok(0)
+}
+
 fn push_tcp_event<C: EbpfContext>(ctx: &C, evt: &TcpSocketEvent) {
     unsafe {
         #[allow(static_mut_refs)]
