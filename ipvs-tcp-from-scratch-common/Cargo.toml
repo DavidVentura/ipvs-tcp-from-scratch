@@ -9,6 +9,7 @@ user = ["aya"]
 
 [dependencies]
 aya = { workspace = true, optional = true }
+strum_macros = "0.26.4"
 
 [lib]
 path = "src/lib.rs"
