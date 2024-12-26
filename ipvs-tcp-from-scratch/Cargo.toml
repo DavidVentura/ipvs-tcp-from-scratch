@@ -12,7 +12,8 @@ aya-log = { workspace = true }
 env_logger = { workspace = true }
 libc = { workspace = true }
 log = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "net", "signal"] }
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "net", "signal", "sync"] }
+bytes = "1.9.0"
 
 [build-dependencies]
 anyhow = { workspace = true }

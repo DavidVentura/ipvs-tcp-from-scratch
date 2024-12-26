@@ -5,6 +5,12 @@ use core::net::SocketAddrV4;
 pub struct TcpSocketEvent {
     pub oldstate: TcpState,
     pub newstate: TcpState,
+    pub key: TcpKey,
+    pub ipvs_dest: Option<SocketAddrV4>,
+}
+
+#[derive(Debug)]
+pub struct TcpKey {
     pub src: SocketAddrV4,
     pub dst: SocketAddrV4,
 }

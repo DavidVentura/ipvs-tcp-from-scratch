@@ -407,6 +407,7 @@ dependencies = [
  "aya",
  "aya-build",
  "aya-log",
+ "bytes",
  "env_logger",
  "ipvs-tcp-from-scratch-common",
  "ipvs-tcp-from-scratch-ebpf",
