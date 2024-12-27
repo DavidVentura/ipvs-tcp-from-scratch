@@ -1,6 +1,6 @@
 .PHONY: run build bindings
 run:
-	cargo run --release --config 'target."cfg(all())".runner="sudo -E"'
+	RUST_LOG=info cargo run --release --config 'target."cfg(all())".runner="sudo -E"' 2>&1 | grep --line-buffered -vE "127.0.0.1:8000|0.0.0.0"
 build:
 	cargo build --release
 bindings: ipvs-tcp-from-scratch-ebpf/src/tracepoint_gen.rs

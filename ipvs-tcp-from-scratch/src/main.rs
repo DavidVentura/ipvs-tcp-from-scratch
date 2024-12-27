@@ -1,4 +1,5 @@
-use aya::programs::TracePoint;
+use anyhow::Context;
+use aya::programs::{KProbe, TracePoint};
 #[rustfmt::skip]
 use log::{debug, warn};
 use tokio::signal;
@@ -36,6 +37,12 @@ async fn main() -> anyhow::Result<()> {
         .try_into()?;
     program.load()?;
     program.attach("sock", "inet_sock_set_state")?;
+
+    let ipvs_conn: &mut KProbe = ebpf.program_mut("ip_vs_conn_new").unwrap().try_into()?;
+    ipvs_conn.load()?;
+    ipvs_conn
+        .attach("ip_vs_conn_new", 0)
+        .context("failed to attach to ip_vs_conn_new, is the kernel module loaded?")?;
 
     let ctrl_c = signal::ctrl_c();
     println!("Waiting for Ctrl-C...");
