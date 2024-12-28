@@ -61,6 +61,11 @@ async fn main() -> anyhow::Result<()> {
     tcp_retrans.load()?;
     tcp_retrans.attach("tcp", "tcp_retransmit_skb")?;
 
+    let tcp_rcv_reset: &mut TracePoint =
+        ebpf.program_mut("tcp_receive_reset").unwrap().try_into()?;
+    tcp_rcv_reset.load()?;
+    tcp_rcv_reset.attach("tcp", "tcp_receive_reset")?;
+
     let events: AsyncPerfEventArray<_> = ebpf.take_map("TCP_EVENTS").unwrap().try_into()?;
 
     println!("Waiting for Ctrl-C...");

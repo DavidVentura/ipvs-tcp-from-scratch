@@ -6,7 +6,8 @@
 include!(concat!(env!("OUT_DIR"), "/ipvs_bindings.rs"));
 
 use crate::tracepoint_gen::{
-    trace_event_raw_inet_sock_set_state, trace_event_raw_tcp_event_sk_skb,
+    trace_event_raw_inet_sock_set_state, trace_event_raw_tcp_event_sk,
+    trace_event_raw_tcp_event_sk_skb,
 };
 
 use aya_ebpf::helpers;
@@ -271,6 +272,42 @@ fn push_tcp_event<C: EbpfContext>(ctx: &C, evt: &TcpSocketEvent) {
         #[allow(static_mut_refs)]
         TCP_EVENTS.output(ctx, evt, 0);
     }
+}
+
+#[tracepoint]
+pub fn tcp_receive_reset(ctx: TracePointContext) -> i64 {
+    match try_tcp_receive_reset(&ctx) {
+        Ok(ret) => ret,
+        Err(ret) => ret,
+    }
+}
+
+fn tcp_key_from_raw_tcp_event_sk(ctx: &TracePointContext) -> Option<TcpKey> {
+    let evt_ptr = ctx.as_ptr() as *const trace_event_raw_tcp_event_sk;
+    let evt = unsafe { evt_ptr.as_ref()? };
+    Some(TcpKey {
+        src: SocketAddrV4::new(u32::from_be_bytes(evt.saddr).into(), evt.sport),
+        dst: SocketAddrV4::new(u32::from_be_bytes(evt.daddr).into(), evt.dport),
+    })
+}
+
+// Update the entry in IPVS_TCP_MAP to set `received_rst` flag
+// This event executes before `tcp_set_state`
+fn try_tcp_receive_reset(ctx: &TracePointContext) -> Result<i64, i64> {
+    if let Some(key) = tcp_key_from_raw_tcp_event_sk(ctx) {
+        let v = unsafe { IPVS_TCP_MAP.get(&key) }.copied();
+        if v.is_none() {
+            return Ok(0);
+        }
+        let ev = TcpSocketEvent {
+            key,
+            event: Event::ReceivedReset,
+            ipvs_dest: v,
+        };
+
+        push_tcp_event(ctx, &ev);
+    }
+    Ok(0)
 }
 
 #[cfg(not(test))]

@@ -5,6 +5,7 @@ use core::net::SocketAddrV4;
 pub enum Event {
     StateChange { old: TcpState, new: TcpState },
     ConnectRetrans,
+    ReceivedReset,
 }
 #[derive(Debug)]
 pub struct TcpSocketEvent {
