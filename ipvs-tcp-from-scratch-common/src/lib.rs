@@ -2,10 +2,14 @@
 use core::net::SocketAddrV4;
 
 #[derive(Debug)]
+pub enum Event {
+    StateChange { old: TcpState, new: TcpState },
+    ConnectRetrans,
+}
+#[derive(Debug)]
 pub struct TcpSocketEvent {
-    pub oldstate: TcpState,
-    pub newstate: TcpState,
     pub key: TcpKey,
+    pub event: Event,
     pub ipvs_dest: Option<SocketAddrV4>,
 }
 

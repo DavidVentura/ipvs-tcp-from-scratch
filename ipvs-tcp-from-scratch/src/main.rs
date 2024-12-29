@@ -56,6 +56,11 @@ async fn main() -> anyhow::Result<()> {
         .attach("ip_vs_conn_new", 0)
         .context("failed to attach to ip_vs_conn_new, is the kernel module loaded?")?;
 
+    let tcp_retrans: &mut TracePoint =
+        ebpf.program_mut("tcp_retransmit_skb").unwrap().try_into()?;
+    tcp_retrans.load()?;
+    tcp_retrans.attach("tcp", "tcp_retransmit_skb")?;
+
     let events: AsyncPerfEventArray<_> = ebpf.take_map("TCP_EVENTS").unwrap().try_into()?;
 
     println!("Waiting for Ctrl-C...");

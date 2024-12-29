@@ -5,7 +5,9 @@
 #![allow(non_snake_case)]
 include!(concat!(env!("OUT_DIR"), "/ipvs_bindings.rs"));
 
-use crate::tracepoint_gen::trace_event_raw_inet_sock_set_state;
+use crate::tracepoint_gen::{
+    trace_event_raw_inet_sock_set_state, trace_event_raw_tcp_event_sk_skb,
+};
 
 use aya_ebpf::helpers;
 use aya_ebpf::macros::{kprobe, map, tracepoint};
@@ -41,7 +43,6 @@ fn try_ipvs_tcp_from_scratch(ctx: TracePointContext) -> Result<u32, u32> {
     if let Some(ev) = make_ev_from_raw(&ctx) {
         let v = unsafe { IPVS_TCP_MAP.get(&ev.key) }.copied();
         if v.is_none() {
-            info!(&ctx, "Ignoring TCP conn not going to IPVS",);
             return Ok(0);
         }
         let ev = TcpSocketEvent { ipvs_dest: v, ..ev };
@@ -70,8 +71,10 @@ fn make_ev_from_raw(ctx: &TracePointContext) -> Option<TcpSocketEvent> {
     };
 
     let ev = TcpSocketEvent {
-        oldstate: evt.oldstate.into(),
-        newstate: evt.newstate.into(),
+        event: Event::StateChange {
+            old: evt.oldstate.into(),
+            new: evt.newstate.into(),
+        },
         key: TcpKey {
             src: SocketAddrV4::new(evt.saddr.into(), evt.sport),
             dst: SocketAddrV4::new(evt.daddr.into(), evt.dport),
@@ -202,21 +205,64 @@ fn tcp_key_from_sk_comm(ctx: &ProbeContext) -> Option<TcpKey> {
     let ip4saddr = unsafe { sk_comm.__bindgen_anon_1.__bindgen_anon_1.skc_rcv_saddr };
 
     Some(TcpKey {
-        src: SocketAddrV4::new(u32::from_be(ip4daddr).into(), sport),
-        dst: SocketAddrV4::new(u32::from_be(ip4saddr).into(), vport),
+        src: SocketAddrV4::new(u32::from_be(ip4saddr).into(), sport),
+        dst: SocketAddrV4::new(u32::from_be(ip4daddr).into(), vport),
     })
+}
+
+fn tcp_key_from_sk_skb(ctx: &TracePointContext) -> Option<(TcpKey, TcpState)> {
+    let evt_ptr = ctx.as_ptr() as *const trace_event_raw_tcp_event_sk_skb;
+    let evt = unsafe { evt_ptr.as_ref()? };
+    let state: TcpState = evt.state.into();
+    let key = TcpKey {
+        src: SocketAddrV4::new(u32::from_be_bytes(evt.saddr).into(), evt.sport),
+        dst: SocketAddrV4::new(u32::from_be_bytes(evt.daddr).into(), evt.dport),
+    };
+    Some((key, state))
 }
 
 fn try_tcp_connect(ctx: &ProbeContext) -> Result<u32, u32> {
     if let Some(key) = tcp_key_from_sk_comm(ctx) {
         let ev = TcpSocketEvent {
-            oldstate: TcpState::Close,
-            newstate: TcpState::SynSent,
             key,
+            event: Event::StateChange {
+                old: TcpState::Close,
+                new: TcpState::SynSent,
+            },
             ipvs_dest: None,
         };
         push_tcp_event(ctx, &ev);
     }
+    Ok(0)
+}
+
+#[tracepoint]
+pub fn tcp_retransmit_skb(ctx: TracePointContext) -> i64 {
+    match try_tcp_retransmit_skb(&ctx) {
+        Ok(ret) => ret,
+        Err(ret) => ret,
+    }
+}
+fn try_tcp_retransmit_skb(ctx: &TracePointContext) -> Result<i64, i64> {
+    let Some((key, state)) = tcp_key_from_sk_skb(ctx) else {
+        return Ok(0);
+    };
+    // We only care about connection opening, to detect timeouts
+    if TcpState::SynSent != state {
+        return Ok(0);
+    }
+    let v = unsafe { IPVS_TCP_MAP.get(&key) };
+    if v.is_none() {
+        // Not IPVS related, we don't care
+        return Ok(0);
+    }
+
+    let evt = TcpSocketEvent {
+        key,
+        ipvs_dest: v.copied(),
+        event: Event::ConnectRetrans,
+    };
+    push_tcp_event(ctx, &evt);
     Ok(0)
 }
 
