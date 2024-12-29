@@ -5,6 +5,7 @@
 #![allow(non_snake_case)]
 include!(concat!(env!("OUT_DIR"), "/ipvs_bindings.rs"));
 
+use crate::ktypes::{nf_inet_addr, sock};
 use crate::tracepoint_gen::{
     trace_event_raw_inet_sock_set_state, trace_event_raw_tcp_event_sk,
     trace_event_raw_tcp_event_sk_skb,
@@ -20,6 +21,11 @@ use aya_log_ebpf::info;
 use core::net::SocketAddrV4;
 use ipvs_tcp_from_scratch_common::*;
 
+#[allow(non_upper_case_globals)]
+#[allow(non_snake_case)]
+#[allow(non_camel_case_types)]
+#[allow(dead_code)]
+mod ktypes;
 #[allow(non_upper_case_globals)]
 #[allow(non_snake_case)]
 #[allow(non_camel_case_types)]
