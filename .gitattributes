@@ -1,0 +1,3 @@
+ipvs-tcp-from-scratch-ebpf/wrapper.h linguist-generated
+ipvs-tcp-from-scratch-ebpf/ktypes.rs linguist-generated
+ipvs-tcp-from-scratch-ebpf/tracepoint_gen.rs linguist-generated
